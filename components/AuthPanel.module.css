@@ -1,0 +1,122 @@
+.panel {
+    background: var(--white);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.content {
+    width: 100%;
+    max-width: 380px;
+    animation: fadeIn 0.8s ease-out both;
+}
+
+.heading {
+    font-size: var(--text-3xl);
+    font-weight: 800;
+    color: var(--gray-900);
+    margin-bottom: var(--spacing-lg);
+    animation: slideDown 0.6s ease-out 0.3s both;
+}
+
+.socialButtons {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: var(--spacing-md);
+    animation: fadeIn 0.8s ease-out 0.4s both;
+}
+
+.divider {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin: var(--spacing-lg) 0;
+    animation: fadeIn 0.8s ease-out 0.5s both;
+}
+
+.dividerLine {
+    flex: 1;
+    height: 1px;
+    background: var(--gray-300);
+}
+
+.dividerText {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--gray-700);
+}
+
+.terms {
+    font-size: var(--text-xs);
+    color: var(--gray-700);
+    line-height: 1.5;
+    margin-top: var(--spacing-md);
+    text-align: center;
+    animation: fadeIn 0.8s ease-out 0.8s both;
+}
+
+.link {
+    color: var(--primary-blue);
+    text-decoration: underline;
+    transition: color var(--transition-speed) var(--transition-timing);
+}
+
+.link:hover {
+    color: var(--primary-dark);
+}
+
+.signin {
+    font-size: var(--text-sm);
+    color: var(--gray-700);
+    margin-top: var(--spacing-lg);
+    text-align: center;
+    animation: fadeIn 0.8s ease-out 0.9s both;
+}
+
+.signinLink {
+    color: var(--primary-blue);
+    font-weight: 600;
+    transition: color var(--transition-speed) var(--transition-timing);
+}
+
+.signinLink:hover {
+    color: var(--primary-dark);
+    text-decoration: underline;
+}
+
+/* Desktop: Fixed Left Panel */
+@media (min-width: 1024px) {
+    .panel {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 40%;
+        height: 100vh;
+        overflow-y: auto;
+    }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+    .panel {
+        width: 40%;
+    }
+}
+
+@media (max-width: 767px) {
+    .panel {
+        min-height: auto;
+        padding: var(--spacing-lg) var(--spacing-md);
+    }
+
+    .heading {
+        font-size: var(--text-2xl);
+        margin-bottom: var(--spacing-md);
+    }
+
+    .content {
+        max-width: 100%;
+    }
+}

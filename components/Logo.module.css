@@ -1,0 +1,41 @@
+.logo {
+    display: flex;
+    align-items: center;
+    margin-bottom: var(--spacing-xl);
+}
+
+.icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: scaleIn 0.5s ease-out both;
+}
+
+.text {
+    font-size: 1.5rem;
+    font-weight: 700;
+    animation: slideDown 0.6s ease-out 0.2s both;
+}
+
+.web {
+    color: var(--primary-blue);
+}
+
+.chat{
+    color: var(--secondary-blue);
+}
+
+.ai {
+    color: var(--gray-900);
+    font-weight: 800;
+}
+
+@media (max-width: 767px) {
+    .logo {
+        margin-bottom: var(--spacing-lg);
+    }
+
+    .text {
+        font-size: 1.25rem;
+    }
+}
