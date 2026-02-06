@@ -7,14 +7,23 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Create database tables only on startup
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        print(f"Database initialization error: {e}")
+    yield
 
 # Initialize FastAPI app
 app = FastAPI(
     title="WebChat AI API",
     description="Email OTP Authentication API",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # Configure CORS
