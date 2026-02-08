@@ -14,8 +14,8 @@ def generate_otp() -> str:
     """Generate a random 6-digit OTP"""
     return ''.join(random.choices(string.digits, k=6))
 
-def create_otp(db: Session, email: str) -> OTPCode:
-    """Create a new OTP for the given email"""
+def create_otp(db: Session, email: str, pending_user_data: dict = None) -> OTPCode:
+    """Create a new OTP for the given email, optionally storing pending registration data"""
     # Invalidate any previous OTPs for this email
     db.query(OTPCode).filter(
         OTPCode.email == email,
@@ -31,7 +31,8 @@ def create_otp(db: Session, email: str) -> OTPCode:
         email=email,
         code=code,
         expires_at=expires_at,
-        verified=False
+        verified=False,
+        pending_user_data=pending_user_data
     )
     
     db.add(otp_record)
@@ -40,10 +41,10 @@ def create_otp(db: Session, email: str) -> OTPCode:
     
     return otp_record
 
-def verify_otp(db: Session, email: str, code: str) -> tuple[bool, str]:
+def verify_otp(db: Session, email: str, code: str) -> tuple[bool, str, OTPCode]:
     """
     Verify OTP code for the given email
-    Returns (success: bool, message: str)
+    Returns (success: bool, message: str, otp_record: OTPCode)
     """
     otp_record = db.query(OTPCode).filter(
         OTPCode.email == email,
@@ -52,14 +53,14 @@ def verify_otp(db: Session, email: str, code: str) -> tuple[bool, str]:
     ).first()
     
     if not otp_record:
-        return False, "Invalid OTP code"
+        return False, "Invalid OTP code", None
     
-    # Check if expired (using timezone-aware comparison)
+    # Check if expired
     if datetime.now(timezone.utc) > otp_record.expires_at:
-        return False, "OTP has expired"
+        return False, "OTP has expired", None
     
     # Mark as verified
     otp_record.verified = True
     db.commit()
     
-    return True, "OTP verified successfully"
+    return True, "OTP verified successfully", otp_record

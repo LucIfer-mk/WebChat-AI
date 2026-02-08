@@ -23,7 +23,23 @@ export default function AuthPanel() {
           <span className={styles.dividerLine}></span>
         </div>
 
-        <EmailForm />
+        <a
+          href="/signin"
+          className={styles.emailButton}
+          style={{
+            display: "block",
+            textAlign: "center",
+            padding: "12px",
+            background: "#1f2937",
+            color: "white",
+            borderRadius: "8px",
+            textDecoration: "none",
+            fontWeight: "600",
+            marginBottom: "1rem",
+          }}
+        >
+          Sign Up with Email
+        </a>
 
         <p className={styles.terms}>
           By clicking the button above, you agree to our{" "}
@@ -37,10 +53,14 @@ export default function AuthPanel() {
           .
         </p>
 
-        <p className={styles.signin}>
-          Already Have an Account?{" "}
-          <a href="/signin" className={styles.signinLink}>
-            Sign In
+        <p className={styles.signin} style={{ marginTop: "1rem" }}>
+          New here?{" "}
+          <a
+            href="/register"
+            className={styles.signinLink}
+            style={{ color: "#3b82f6" }}
+          >
+            Get Started
           </a>
         </p>
       </div>
