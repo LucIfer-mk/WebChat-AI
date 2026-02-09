@@ -13,7 +13,8 @@
 
 .dashboard-layout {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   background-color: var(--dashboard-bg);
   font-family: 'Inter', sans-serif;
 }
@@ -21,6 +22,8 @@
 /* Sidebar */
 .sidebar {
   width: 225px;
+  height: 100vh;
+  overflow-y: auto;
   background-color: var(--sidebar-bg);
   color: white;
   display: flex;
@@ -99,7 +102,8 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .header {
@@ -141,6 +145,8 @@
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 24px;
+  overflow-y: auto;
+  flex: 1;
 }
 
 /* Cards */
@@ -244,11 +250,16 @@
   .dashboard-body {
     grid-template-columns: 1fr;
   }
+
   .stats-container {
     grid-column: span 1;
     grid-template-columns: 1fr;
   }
-  .analytics-card, .review-card, .conversations-card, .usage-card {
+
+  .analytics-card,
+  .review-card,
+  .conversations-card,
+  .usage-card {
     grid-column: span 1;
   }
 }

@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState, useEffect, FormEvent } from "react";
+import React, { useState, useEffect, FormEvent, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import styles from "./page.module.css";
 
-export default function VerifyOTP() {
+function OTPVerificationContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const email = searchParams.get("email") || "";
@@ -204,5 +204,13 @@ export default function VerifyOTP() {
         </form>
       </div>
     </main>
+  );
+}
+
+export default function VerifyOTP() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <OTPVerificationContent />
+    </Suspense>
   );
 }
