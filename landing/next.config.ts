@@ -7,7 +7,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/api/:path*',
-        destination: 'webchatbackend-6893imfx1-manojs-projects-08418023.vercel.app',
+        destination: 'https://webchatbackend-6893imfx1-manojs-projects-08418023.vercel.app/api/:path*',
       },
     ];
   },
