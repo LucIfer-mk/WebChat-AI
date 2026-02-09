@@ -1,10 +1,22 @@
+"use client";
+
 import React from "react";
+import { useRouter } from "next/navigation";
 import Logo from "./Logo";
 import SocialButton from "./SocialButton";
 import EmailForm from "./EmailForm";
 import styles from "./AuthPanel.module.css";
 
 export default function AuthPanel() {
+  const router = useRouter();
+
+  const handleDemoLogin = () => {
+    localStorage.setItem("session_token", "demo-session-token");
+    localStorage.setItem("user_email", "demo@example.com");
+    localStorage.setItem("user_name", "Demo User");
+    router.push("/dashboard");
+  };
+
   return (
     <section className={styles.panel} aria-label="Sign up section">
       <div className={styles.content}>
@@ -40,6 +52,25 @@ export default function AuthPanel() {
         >
           Sign Up with Email
         </a>
+
+        <button
+          onClick={handleDemoLogin}
+          className={styles.emailButton}
+          style={{
+            width: "100%",
+            textAlign: "center",
+            padding: "12px",
+            background: "#3b82f6",
+            color: "white",
+            borderRadius: "8px",
+            border: "none",
+            fontWeight: "600",
+            marginBottom: "1rem",
+            cursor: "pointer",
+          }}
+        >
+          Demo Login (No Auth)
+        </button>
 
         <p className={styles.terms}>
           By clicking the button above, you agree to our{" "}

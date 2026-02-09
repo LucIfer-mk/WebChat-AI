@@ -98,6 +98,9 @@ export default function VerifyOTP() {
         if (data.session_token) {
           localStorage.setItem("session_token", data.session_token);
           localStorage.setItem("user_email", email);
+          if (data.user && data.user.name) {
+            localStorage.setItem("user_name", data.user.name);
+          }
         }
         // Navigate to dashboard
         router.push("/dashboard");
