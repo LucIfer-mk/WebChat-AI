@@ -1,0 +1,133 @@
+.sidebar {
+    width: 260px;
+    background-color: var(--sidebar-bg);
+    color: var(--sidebar-text);
+    display: flex;
+    flex-direction: column;
+    padding: 24px 0;
+    height: 100vh;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 100;
+    overflow-y: auto;
+    transition: all var(--transition-normal);
+    border-right: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.logoContainer {
+    padding: 0 24px 32px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.logo {
+    color: white;
+    font-size: 1.15rem;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+}
+
+.logoIcon {
+    width: 34px;
+    height: 34px;
+    background: linear-gradient(135deg, var(--primary), var(--primary-light));
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.nav {
+    flex: 1;
+    padding: 0 12px;
+}
+
+.nav ul {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.navLink {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 16px;
+    color: var(--sidebar-text);
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: all var(--transition-fast);
+    border-radius: 10px;
+    position: relative;
+}
+
+.navLink:hover {
+    background-color: var(--sidebar-hover);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.activeNavLink {
+    background-color: var(--sidebar-active);
+    color: var(--sidebar-active-text);
+}
+
+.activeNavLink::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 20px;
+    background: var(--primary);
+    border-radius: 0 4px 4px 0;
+}
+
+.userProfile {
+    padding: 20px 20px;
+    margin: 0 12px;
+    margin-top: auto;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #6366F1, #818CF8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.75rem;
+    color: white;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.userInfo {
+    flex: 1;
+    min-width: 0;
+}
+
+.userName {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: white;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.userRole {
+    font-size: 0.7rem;
+    color: var(--sidebar-text);
+    margin-top: 1px;
+}

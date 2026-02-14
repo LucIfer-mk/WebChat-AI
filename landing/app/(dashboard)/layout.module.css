@@ -1,0 +1,13 @@
+.container {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    animation: fadeInUp 0.4s ease;
+}
+
+.content {
+    padding: 0 32px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}

@@ -1,0 +1,103 @@
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 24px 32px;
+    background: transparent;
+}
+
+.title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-main);
+    letter-spacing: -0.5px;
+}
+
+.actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.searchContainer {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.searchIcon {
+    position: absolute;
+    left: 14px;
+    color: var(--text-muted);
+}
+
+.searchInput {
+    padding: 10px 14px 10px 40px;
+    background: white;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-md);
+    font-size: 0.85rem;
+    width: 220px;
+    outline: none;
+    color: var(--text-main);
+    transition: all var(--transition-fast);
+}
+
+.searchInput::placeholder {
+    color: var(--text-muted);
+}
+
+.searchInput:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    width: 260px;
+}
+
+.iconButton {
+    position: relative;
+    color: var(--text-muted);
+    background: white;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid var(--border);
+    transition: all var(--transition-fast);
+}
+
+.iconButton:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: var(--primary-bg);
+}
+
+.badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 8px;
+    height: 8px;
+    background-color: var(--error);
+    border-radius: 50%;
+    border: 2px solid white;
+}
+
+.profile {
+    width: 40px;
+    height: 40px;
+    background: white;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    border: 1.5px solid var(--border);
+    transition: all var(--transition-fast);
+}
+
+.profile:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}

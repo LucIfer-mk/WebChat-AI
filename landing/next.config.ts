@@ -3,13 +3,18 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   /* config options here */
   reactCompiler: true,
-  async rewrites() {
-    return [
+  turbopack: {
+    root: 'c:/Users/admin/Desktop/Clone/WebChat-AI/landing',
+  },
+  images: {
+    remotePatterns: [
       {
-        source: '/api/:path*',
-        destination: 'https://webchatbackend-6893imfx1-manojs-projects-08418023.vercel.app/api/:path*',
+        protocol: "http",
+        hostname: "localhost",
+        port: "8000",
+        pathname: "/uploads/**",
       },
-    ];
+    ],
   },
 };
 
