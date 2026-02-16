@@ -109,3 +109,41 @@ class Message(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     conversation = relationship("Conversation", back_populates="messages")
+
+
+class Review(Base):
+    """User reviews/ratings for a chatbot."""
+    __tablename__ = "reviews"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    chatbot_id = Column(String, ForeignKey("chatbots.id", ondelete="CASCADE"), nullable=False)
+    rating = Column(Integer, nullable=False)           # 1-5 stars
+    comment = Column(Text, nullable=True)
+    session_id = Column(String, nullable=True)        # to link with a session if available
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    chatbot = relationship("Chatbot")
+
+
+class Visit(Base):
+    """Tracks when the chatbot widget is loaded on a website."""
+    __tablename__ = "visits"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    chatbot_id = Column(String, ForeignKey("chatbots.id", ondelete="CASCADE"), nullable=False)
+    session_id = Column(String, nullable=True)        # unique per browser visitor session
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    chatbot = relationship("Chatbot")
+
+
+class Usage(Base):
+    """Tracks when a user has a conversation and closes the bot."""
+    __tablename__ = "usage_stats"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    chatbot_id = Column(String, ForeignKey("chatbots.id", ondelete="CASCADE"), nullable=False)
+    session_id = Column(String, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    chatbot = relationship("Chatbot")

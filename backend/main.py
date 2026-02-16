@@ -13,13 +13,14 @@ from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 
 from database import engine, get_db, Base
-from models import User, Chatbot, KnowledgeEntry, Conversation, Message
+from models import User, Chatbot, KnowledgeEntry, Conversation, Message, Review, Visit, Usage
 from schemas import (
     UserRegister, UserLogin, UserResponse,
     ChatbotCreate, ChatbotUpdate, ChatbotResponse,
     KnowledgeEntryCreate, KnowledgeEntryUpdate, KnowledgeEntryResponse,
     ConversationResponse, ConversationDetailResponse,
     DashboardStats, BotStats, ChartDataPoint,
+    ReviewCreate, ReviewResponse,
 )
 from passlib.context import CryptContext
 
@@ -242,10 +243,16 @@ def serve_widget():
 
 
 @app.get("/api/widget/config/{bot_id}")
-def widget_config(bot_id: str, db: Session = Depends(get_db)):
+def widget_config(bot_id: str, session_id: Optional[str] = None, db: Session = Depends(get_db)):
     bot = db.query(Chatbot).filter(Chatbot.id == bot_id).first()
     if not bot:
         raise HTTPException(status_code=404, detail="Chatbot not found")
+    
+    # Record a visit
+    visit = Visit(chatbot_id=bot_id, session_id=session_id)
+    db.add(visit)
+    db.commit()
+    
     return bot.to_dict()
 
 
@@ -328,6 +335,81 @@ def widget_chat(bot_id: str, body: dict, db: Session = Depends(get_db)):
     return {"reply": reply, "session_id": session_id, "conversation_id": conversation.id}
 
 
+@app.post("/api/widget/review/{bot_id}")
+def submit_review(bot_id: str, payload: ReviewCreate, db: Session = Depends(get_db)):
+    bot = db.query(Chatbot).filter(Chatbot.id == bot_id).first()
+    if not bot:
+        raise HTTPException(status_code=404, detail="Chatbot not found")
+    
+    review = Review(
+        chatbot_id=bot_id,
+        rating=payload.rating,
+        comment=payload.comment,
+        session_id=payload.session_id,
+    )
+    db.add(review)
+    db.commit()
+    db.refresh(review)
+    return {"status": "success", "review_id": review.id}
+
+
+@app.post("/api/widget/usage/{bot_id}")
+def record_usage(bot_id: str, body: dict, db: Session = Depends(get_db)):
+    usage = Usage(
+        chatbot_id=bot_id,
+        session_id=body.get("session_id")
+    )
+    db.add(usage)
+    db.commit()
+    return {"status": "success"}
+
+
+@app.get("/api/reviews", response_model=List[ReviewResponse])
+def list_reviews(user_id: Optional[str] = None, bot_id: Optional[str] = None, db: Session = Depends(get_db)):
+    query = db.query(Review)
+    
+    if bot_id:
+        query = query.filter(Review.chatbot_id == bot_id)
+    elif user_id:
+        query = query.join(Chatbot).filter(Chatbot.user_id == user_id)
+        
+    reviews = query.order_by(Review.created_at.desc()).all()
+    
+    result = []
+    for r in reviews:
+        bot = db.query(Chatbot).filter(Chatbot.id == r.chatbot_id).first()
+        result.append(ReviewResponse(
+            id=r.id,
+            chatbot_id=r.chatbot_id,
+            chatbot_name=bot.name if bot else "Unknown",
+            rating=r.rating,
+            comment=r.comment,
+            created_at=r.created_at,
+        ))
+    return result
+
+
+@app.get("/api/analytics/reviews/summary")
+def review_summary(user_id: Optional[str] = None, bot_id: Optional[str] = None, db: Session = Depends(get_db)):
+    query = db.query(Review)
+    if bot_id:
+        query = query.filter(Review.chatbot_id == bot_id)
+    elif user_id:
+        query = query.join(Chatbot).filter(Chatbot.user_id == user_id)
+    
+    total = query.count()
+    
+    # Labels: Excellent (5), Good (4), Average (3), Poor (2), Terrible (1)
+    results = []
+    labels = ["Terrible", "Poor", "Average", "Good", "Excellent"]
+    for i in range(1, 6):
+        count = query.filter(Review.rating == i).count()
+        percentage = (count / total) * 100 if total > 0 else 0
+        results.append({"label": labels[i-1], "value": round(percentage)})
+    
+    return list(reversed(results))
+
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  CONVERSATIONS & ANALYTICS
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -375,19 +457,27 @@ def get_conversation(conv_id: str, db: Session = Depends(get_db)):
 
 
 @app.get("/api/analytics/dashboard", response_model=DashboardStats)
-def dashboard_stats(user_id: Optional[str] = None, db: Session = Depends(get_db)):
+def dashboard_stats(user_id: Optional[str] = None, bot_id: Optional[str] = None, db: Session = Depends(get_db)):
     bot_query = db.query(Chatbot)
     conv_query = db.query(Conversation)
     msg_query = db.query(Message)
+    usage_query = db.query(Usage)
     
-    if user_id:
+    if bot_id:
+        bot_query = bot_query.filter(Chatbot.id == bot_id)
+        conv_query = conv_query.filter(Conversation.chatbot_id == bot_id)
+        msg_query = msg_query.join(Conversation).filter(Conversation.chatbot_id == bot_id)
+        usage_query = usage_query.filter(Usage.chatbot_id == bot_id)
+    elif user_id:
         bot_query = bot_query.filter(Chatbot.user_id == user_id)
         conv_query = conv_query.join(Chatbot).filter(Chatbot.user_id == user_id)
         msg_query = msg_query.join(Conversation).join(Chatbot).filter(Chatbot.user_id == user_id)
+        usage_query = usage_query.join(Chatbot).filter(Chatbot.user_id == user_id)
 
     total_bots = bot_query.with_entities(func.count(Chatbot.id)).scalar() or 0
     total_conversations = conv_query.with_entities(func.count(Conversation.id)).scalar() or 0
     total_messages = msg_query.with_entities(func.count(Message.id)).scalar() or 0
+    total_usage = usage_query.with_entities(func.count(Usage.id)).scalar() or 0
     
     active_conversations = conv_query.filter(Conversation.status == "active") \
                                      .with_entities(func.count(Conversation.id)).scalar() or 0
@@ -401,14 +491,15 @@ def dashboard_stats(user_id: Optional[str] = None, db: Session = Depends(get_db)
         total_bots=total_bots,
         total_conversations=total_conversations,
         total_messages=total_messages,
+        total_usage=total_usage,
         messages_today=messages_today,
         active_conversations=active_conversations,
     )
 
 
 @app.get("/api/analytics/chart", response_model=List[ChartDataPoint])
-def chart_data(days: int = 30, db: Session = Depends(get_db)):
-    """Return daily conversation & message counts for the last N days."""
+def chart_data(days: int = 30, user_id: Optional[str] = None, bot_id: Optional[str] = None, db: Session = Depends(get_db)):
+    """Return daily conversation, message & visit counts for the last N days."""
     result = []
     now = datetime.now(timezone.utc)
 
@@ -417,20 +508,37 @@ def chart_data(days: int = 30, db: Session = Depends(get_db)):
         day_start = day.replace(hour=0, minute=0, second=0, microsecond=0)
         day_end = day_start + timedelta(days=1)
 
-        conv_count = db.query(func.count(Conversation.id)).filter(
-            Conversation.started_at >= day_start,
-            Conversation.started_at < day_end,
-        ).scalar() or 0
-
-        msg_count = db.query(func.count(Message.id)).filter(
+        usage_query = db.query(func.count(Usage.id)).filter(
+            Usage.created_at >= day_start,
+            Usage.created_at < day_end,
+        )
+        msg_query = db.query(func.count(Message.id)).filter(
             Message.created_at >= day_start,
             Message.created_at < day_end,
-        ).scalar() or 0
+        )
+        visit_query = db.query(func.count(Visit.id)).filter(
+            Visit.created_at >= day_start,
+            Visit.created_at < day_end,
+        )
+
+        if bot_id:
+            usage_query = usage_query.filter(Usage.chatbot_id == bot_id)
+            msg_query = msg_query.join(Conversation).filter(Conversation.chatbot_id == bot_id)
+            visit_query = visit_query.filter(Visit.chatbot_id == bot_id)
+        elif user_id:
+            usage_query = usage_query.join(Chatbot).filter(Chatbot.user_id == user_id)
+            msg_query = msg_query.join(Conversation).join(Chatbot).filter(Chatbot.user_id == user_id)
+            visit_query = visit_query.join(Chatbot).filter(Chatbot.user_id == user_id)
+
+        usage_count = usage_query.scalar() or 0
+        msg_count = msg_query.scalar() or 0
+        visit_count = visit_query.scalar() or 0
 
         result.append(ChartDataPoint(
             label=day_start.strftime("%b %d"),
-            conversations=conv_count,
+            usage=usage_count,
             messages=msg_count,
+            visits=visit_count,
         ))
     return result
 

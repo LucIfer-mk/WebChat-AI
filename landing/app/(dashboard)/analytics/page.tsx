@@ -6,14 +6,14 @@ import StatsCard from "@/components/StatsCard";
 import VisitsChart from "@/components/VisitsChart";
 import ReviewProgress from "@/components/ReviewProgress";
 import RecentConversations from "@/components/RecentConversations";
-import PlanUsage from "@/components/PlanUsage";
-import styles from "./page.module.css";
+import styles from "./analytics.module.css";
 
-const getApiUrl = () => {
-  const hostname =
-    typeof window !== "undefined" ? window.location.hostname : "127.0.0.1";
-  return `http://${hostname}:8000`;
-};
+const API_URL = "http://localhost:8000";
+
+interface Chatbot {
+  id: string;
+  name: string;
+}
 
 interface DashboardStats {
   total_bots: number;
@@ -24,7 +24,9 @@ interface DashboardStats {
   active_conversations: number;
 }
 
-export default function Dashboard() {
+export default function AnalyticsPage() {
+  const [bots, setBots] = useState<Chatbot[]>([]);
+  const [selectedBotId, setSelectedBotId] = useState<string>("");
   const [stats, setStats] = useState<DashboardStats>({
     total_bots: 0,
     total_conversations: 0,
@@ -36,10 +38,16 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchStats();
+    fetchBots();
   }, []);
 
-  async function fetchStats() {
+  useEffect(() => {
+    if (selectedBotId) {
+      fetchStats(selectedBotId);
+    }
+  }, [selectedBotId]);
+
+  async function fetchBots() {
     try {
       const storedUser = localStorage.getItem("user");
       let userId = "";
@@ -47,8 +55,22 @@ export default function Dashboard() {
         const user = JSON.parse(storedUser);
         userId = user.id;
       }
+      const res = await fetch(`${API_URL}/api/chatbots?user_id=${userId}`);
+      const data = await res.json();
+      setBots(data);
+      if (data.length > 0) {
+        setSelectedBotId(data[0].id);
+      }
+    } catch (err) {
+      console.error("Failed to fetch bots:", err);
+    }
+  }
+
+  async function fetchStats(botId: string) {
+    setLoading(true);
+    try {
       const res = await fetch(
-        `${getApiUrl()}/api/analytics/dashboard?user_id=${userId}`,
+        `${API_URL}/api/analytics/dashboard?bot_id=${botId}`,
       );
       const data = await res.json();
       setStats(data);
@@ -61,15 +83,29 @@ export default function Dashboard() {
 
   return (
     <div className={styles.container}>
-      <DashboardHeader title="Dashboard" />
+      <DashboardHeader title="Analytics" />
 
       <div className={styles.content}>
+        <div className={styles.selectorCard}>
+          <label htmlFor="bot-selector" className={styles.label}>
+            Select Chatbot
+          </label>
+          <select
+            id="bot-selector"
+            className={styles.select}
+            value={selectedBotId}
+            onChange={(e) => setSelectedBotId(e.target.value)}
+          >
+            {bots.map((bot) => (
+              <option key={bot.id} value={bot.id}>
+                {bot.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
         {/* Stats Section */}
         <div className={styles.statsGrid}>
-          <StatsCard
-            title="Total Bots"
-            value={loading ? "..." : stats.total_bots.toLocaleString()}
-          />
           <StatsCard
             title="Chatbot Usage"
             value={loading ? "..." : stats.total_usage.toLocaleString()}
@@ -82,25 +118,28 @@ export default function Dashboard() {
             title="Total Messages"
             value={loading ? "..." : stats.total_messages.toLocaleString()}
           />
+          <StatsCard
+            title="Active Chats"
+            value={
+              loading ? "..." : stats.active_conversations.toLocaleString()
+            }
+          />
         </div>
 
         {/* Top Charts Section */}
         <div className={styles.topChartsGrid}>
           <div className={styles.mainChart}>
-            <VisitsChart />
+            <VisitsChart botId={selectedBotId} />
           </div>
           <div className={styles.sideChart}>
-            <ReviewProgress />
+            <ReviewProgress botId={selectedBotId} />
           </div>
         </div>
 
         {/* Bottom Section */}
         <div className={styles.bottomGrid}>
           <div className={styles.tableContainer}>
-            <RecentConversations />
-          </div>
-          <div className={styles.usageContainer}>
-            <PlanUsage />
+            <RecentConversations botId={selectedBotId} />
           </div>
         </div>
       </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import {
   LineChart,
   Line,
@@ -11,22 +12,65 @@ import {
   Legend,
 } from "recharts";
 
-const data = [
-  { name: "Jan", visits: 400, bots: 240 },
-  { name: "Feb", visits: 300, bots: 139 },
-  { name: "Mar", visits: 200, bots: 980 },
-  { name: "Apr", visits: 278, bots: 390 },
-  { name: "May", visits: 189, bots: 480 },
-  { name: "Jun", visits: 239, bots: 380 },
-  { name: "Jul", visits: 349, bots: 430 },
-  { name: "Aug", visits: 400, bots: 500 },
-  { name: "Sep", visits: 450, bots: 600 },
-  { name: "Oct", visits: 600, bots: 700 },
-  { name: "Nov", visits: 700, bots: 800 },
-  { name: "Dec", visits: 650, bots: 750 },
-];
+const getApiUrl = () => {
+  const hostname =
+    typeof window !== "undefined" ? window.location.hostname : "127.0.0.1";
+  return `http://${hostname}:8000`;
+};
 
-export default function VisitsChart() {
+export default function VisitsChart({ botId }: { botId?: string }) {
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchChartData() {
+      setLoading(true);
+      try {
+        const storedUser = localStorage.getItem("user");
+        let userId = "";
+        if (storedUser) {
+          const user = JSON.parse(storedUser);
+          userId = user.id;
+        }
+
+        const url = botId
+          ? `${getApiUrl()}/api/analytics/chart?bot_id=${botId}&days=7`
+          : `${getApiUrl()}/api/analytics/chart?user_id=${userId}&days=7`;
+
+        const res = await fetch(url);
+        const result = await res.json();
+        setData(result);
+      } catch (err) {
+        console.error("Failed to fetch chart data:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchChartData();
+  }, [botId]);
+
+  if (loading) {
+    return (
+      <div
+        style={{
+          width: "100%",
+          height: 350,
+          backgroundColor: "white",
+          padding: "24px",
+          borderRadius: "16px",
+          border: "1px solid var(--border)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#94A3B8",
+        }}
+      >
+        Loading analytics...
+      </div>
+    );
+  }
+
   return (
     <div
       style={{
@@ -57,7 +101,7 @@ export default function VisitsChart() {
             stroke="#F1F5F9"
           />
           <XAxis
-            dataKey="name"
+            dataKey="label"
             axisLine={false}
             tickLine={false}
             tick={{ fontSize: 11, fill: "#94A3B8" }}
@@ -100,7 +144,7 @@ export default function VisitsChart() {
           />
           <Line
             type="monotone"
-            dataKey="bots"
+            dataKey="usage"
             name="Chatbot Usage"
             stroke="#06B6D4"
             strokeWidth={2.5}

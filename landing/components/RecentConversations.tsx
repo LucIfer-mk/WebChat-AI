@@ -35,33 +35,37 @@ function timeAgo(dateStr: string): string {
   return `${diffDay}d ago`;
 }
 
-export default function RecentConversations() {
+export default function RecentConversations({ botId }: { botId?: string }) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchConversations();
-  }, []);
+    async function fetchConversations() {
+      setLoading(true);
+      try {
+        const storedUser = localStorage.getItem("user");
+        let userId = "";
+        if (storedUser) {
+          const user = JSON.parse(storedUser);
+          userId = user.id;
+        }
 
-  async function fetchConversations() {
-    try {
-      const storedUser = localStorage.getItem("user");
-      let userId = "";
-      if (storedUser) {
-        const user = JSON.parse(storedUser);
-        userId = user.id;
+        const url = botId
+          ? `${getApiUrl()}/api/conversations?limit=10&bot_id=${botId}`
+          : `${getApiUrl()}/api/conversations?limit=10&user_id=${userId}`;
+
+        const res = await fetch(url);
+        const data = await res.json();
+        setConversations(data);
+      } catch (err) {
+        console.error("Failed to fetch conversations:", err);
+      } finally {
+        setLoading(false);
       }
-      const res = await fetch(
-        `${getApiUrl()}/api/conversations?limit=10&user_id=${userId}`,
-      );
-      const data = await res.json();
-      setConversations(data);
-    } catch (err) {
-      console.error("Failed to fetch conversations:", err);
-    } finally {
-      setLoading(false);
     }
-  }
+
+    fetchConversations();
+  }, [botId]);
 
   if (loading) {
     return (

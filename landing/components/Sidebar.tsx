@@ -10,12 +10,16 @@ import {
   Settings,
   MessageSquare,
   LogOut,
+  Star,
+  BarChart,
 } from "lucide-react";
 import styles from "./Sidebar.module.css";
 
 const menuItems = [
   { name: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
+  { name: "Analytics", icon: BarChart, href: "/analytics" },
   { name: "Chat Bots", icon: Bot, href: "/chat-bots" },
+  { name: "Reviews", icon: Star, href: "/reviews" },
   { name: "Billing", icon: CreditCard, href: "/billing" },
   { name: "Settings", icon: Settings, href: "/setting" },
 ];

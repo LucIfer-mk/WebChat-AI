@@ -135,6 +135,7 @@ class DashboardStats(BaseModel):
     total_bots: int
     total_conversations: int
     total_messages: int
+    total_usage: int
     messages_today: int
     active_conversations: int
 
@@ -148,5 +149,25 @@ class BotStats(BaseModel):
 
 class ChartDataPoint(BaseModel):
     label: str
-    conversations: int
+    usage: int
     messages: int
+    visits: int
+
+
+# ─── Review Schemas ──────────────────────────────────────────
+
+class ReviewCreate(BaseModel):
+    rating: int  # 1-5
+    comment: Optional[str] = None
+    session_id: Optional[str] = None
+
+
+class ReviewResponse(BaseModel):
+    id: str
+    chatbot_id: str
+    chatbot_name: Optional[str] = None
+    rating: int
+    comment: Optional[str]
+    created_at: datetime
+
+    model_config = {"from_attributes": True}

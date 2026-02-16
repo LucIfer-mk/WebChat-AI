@@ -10,14 +10,14 @@ export default function DashboardHeader({ title }: DashboardHeaderProps) {
     <header className={styles.header}>
       <h1 className={styles.title}>{title}</h1>
       <div className={styles.actions}>
-        <div className={styles.searchContainer}>
+        {/* <div className={styles.searchContainer}>
           <Search size={18} className={styles.searchIcon} />
           <input
             type="text"
             placeholder="Search..."
             className={styles.searchInput}
           />
-        </div>
+        </div> */}
       </div>
     </header>
   );

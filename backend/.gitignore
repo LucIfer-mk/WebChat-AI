@@ -1,0 +1,9 @@
+/.env
+/._pycache__
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+.env
+.uploads/
+/.uploads
+

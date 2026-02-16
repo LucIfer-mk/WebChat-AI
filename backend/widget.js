@@ -11,16 +11,34 @@
 
   const baseUrl = new URL(currentScript.src).origin;
 
+  // ─── Session ID (persisted per visitor) ───────────────────
+  const storageKey = `webchat_session_${chatbotId}`;
+  let sessionId = null;
+  try {
+    sessionId = localStorage.getItem(storageKey);
+  } catch (e) {}
+
+  if (!sessionId) {
+    sessionId =
+      "sess_" +
+      Math.random().toString(36).substring(2) +
+      Date.now().toString(36);
+    try {
+      localStorage.setItem(storageKey, sessionId);
+    } catch (e) {}
+  }
+
   // ─── Fetch chatbot config from the server ───────────────────
-  fetch(`${baseUrl}/api/widget/config/${chatbotId}`)
+  fetch(`${baseUrl}/api/widget/config/${chatbotId}?session_id=${sessionId}`)
     .then((res) => {
       if (!res.ok) throw new Error("Failed to load chatbot config");
       return res.json();
     })
-    .then((config) => initWidget(config))
+    .then((config) => initWidget(config, sessionId))
     .catch((err) => console.error("WebChat Widget Error:", err));
 
-  function initWidget(cfg) {
+  function initWidget(cfg, existingSessionId) {
+    let sessionId = existingSessionId;
     // ─── Inject styles ──────────────────────────────────────────
     const style = document.createElement("style");
     style.textContent = `
@@ -270,6 +288,87 @@
         background: #fff;
       }
 
+      /* ── Rating Screen ── */
+      #webchat-rating-screen {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: #fff;
+        z-index: 100;
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 30px;
+        text-align: center;
+        animation: webchat-fade-in 0.3s ease;
+      }
+      @keyframes webchat-fade-in {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+      }
+      #webchat-rating-screen h4 {
+        margin-bottom: 12px;
+        color: #1e293b;
+        font-size: 18px;
+      }
+      #webchat-rating-screen p {
+        font-size: 14px;
+        color: #64748b;
+        margin-bottom: 24px;
+      }
+      .webchat-stars {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 24px;
+      }
+      .webchat-star {
+        cursor: pointer;
+        font-size: 32px;
+        color: #e2e8f0;
+        transition: color 0.2s;
+      }
+      .webchat-star.active {
+        color: #ffb800;
+      }
+      #webchat-rating-comment {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        font-size: 14px;
+        margin-bottom: 20px;
+        resize: none;
+        height: 80px;
+        outline: none;
+      }
+      #webchat-submit-rating {
+        background: ${cfg.primary_color};
+        color: ${cfg.text_color};
+        border: none;
+        padding: 12px 24px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        width: 100%;
+        transition: opacity 0.2s;
+      }
+      #webchat-submit-rating:hover {
+        opacity: 0.9;
+      }
+      #webchat-skip-rating {
+        margin-top: 16px;
+        background: none;
+        border: none;
+        color: #94a3b8;
+        font-size: 13px;
+        cursor: pointer;
+        text-decoration: underline;
+      }
+
       @media (max-width: 420px) {
         #webchat-window {
           width: calc(100vw - 16px);
@@ -316,6 +415,21 @@
           </button>
         </div>
         <div id="webchat-powered">Powered by WebChat AI</div>
+        
+        <div id="webchat-rating-screen">
+          <h4>Rate your experience</h4>
+          <p>How would you rate your conversation with ${cfg.name}?</p>
+          <div class="webchat-stars">
+            <span class="webchat-star" data-rating="1">★</span>
+            <span class="webchat-star" data-rating="2">★</span>
+            <span class="webchat-star" data-rating="3">★</span>
+            <span class="webchat-star" data-rating="4">★</span>
+            <span class="webchat-star" data-rating="5">★</span>
+          </div>
+          <textarea id="webchat-rating-comment" placeholder="Any feedback for us? (Optional)"></textarea>
+          <button id="webchat-submit-rating">Submit Review</button>
+          <button id="webchat-skip-rating">Skip</button>
+        </div>
       </div>
     `;
     document.body.appendChild(container);
@@ -328,24 +442,25 @@
     const inputEl = document.getElementById("webchat-input");
     const sendBtn = document.getElementById("webchat-send");
 
-    let isOpen = false;
+    const ratingScreen = document.getElementById("webchat-rating-screen");
+    const stars = document.querySelectorAll(".webchat-star");
+    const submitRatingBtn = document.getElementById("webchat-submit-rating");
+    const skipRatingBtn = document.getElementById("webchat-skip-rating");
+    const ratingComment = document.getElementById("webchat-rating-comment");
 
-    // ─── Session ID (persisted per visitor) ───────────────────
-    const storageKey = `webchat_session_${chatbotId}`;
-    let sessionId = null;
-    try {
-      sessionId = localStorage.getItem(storageKey);
-    } catch (e) {
-      /* private mode */
-    }
-    if (!sessionId) {
-      sessionId =
-        "sess_" +
-        Math.random().toString(36).substring(2) +
-        Date.now().toString(36);
-      try {
-        localStorage.setItem(storageKey, sessionId);
-      } catch (e) {}
+    let isOpen = false;
+    let currentRating = 0;
+    let reviewSubmitted = false;
+    let hasConvo = false;
+
+    function recordUsage() {
+      if (!hasConvo) return;
+      fetch(`${baseUrl}/api/widget/usage/${chatbotId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId }),
+      }).catch((err) => console.error("Error recording usage:", err));
+      hasConvo = false; // Reset for next time they open/chat
     }
 
     // ─── Toggle Chat ──────────────────────────────────────────
@@ -359,15 +474,95 @@
         }
         inputEl.focus();
       } else {
-        chatWindow.classList.remove("open");
-        trigger.style.display = "flex";
+        closeChat();
       }
     });
 
-    closeBtn.addEventListener("click", () => {
-      isOpen = false;
+    function closeChat() {
+      if (reviewSubmitted || messagesEl.children.length <= 1) {
+        // Just close if already reviewed or no conversation happened
+        if (hasConvo) recordUsage();
+        chatWindow.classList.remove("open");
+        trigger.style.display = "flex";
+        isOpen = false;
+        ratingScreen.style.display = "none";
+      } else {
+        // Show rating screen
+        ratingScreen.style.display = "flex";
+      }
+    }
+
+    closeBtn.addEventListener("click", closeChat);
+
+    // ─── Rating Logic ─────────────────────────────────────────
+    stars.forEach((star) => {
+      star.addEventListener("mouseover", () => {
+        const r = parseInt(star.getAttribute("data-rating"));
+        updateStars(r);
+      });
+      star.addEventListener("mouseout", () => {
+        updateStars(currentRating);
+      });
+      star.addEventListener("click", () => {
+        currentRating = parseInt(star.getAttribute("data-rating"));
+        updateStars(currentRating);
+      });
+    });
+
+    function updateStars(r) {
+      stars.forEach((s) => {
+        const starRating = parseInt(s.getAttribute("data-rating"));
+        if (starRating <= r) {
+          s.classList.add("active");
+        } else {
+          s.classList.remove("active");
+        }
+      });
+    }
+
+    submitRatingBtn.addEventListener("click", () => {
+      if (currentRating === 0) {
+        alert("Please select a rating");
+        return;
+      }
+
+      const comment = ratingComment.value.trim();
+
+      fetch(`${baseUrl}/api/widget/review/${chatbotId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rating: currentRating,
+          comment: comment,
+          session_id: sessionId,
+        }),
+      })
+        .then(() => {
+          recordUsage();
+          reviewSubmitted = true;
+          ratingScreen.innerHTML = `
+          <div style="color: #05CD99; font-size: 48px; margin-bottom: 20px;">✓</div>
+          <h4>Thank you!</h4>
+          <p>Your review has been submitted.</p>
+        `;
+          setTimeout(() => {
+            chatWindow.classList.remove("open");
+            trigger.style.display = "flex";
+            isOpen = false;
+          }, 2000);
+        })
+        .catch((err) => {
+          console.error("Error submitting review:", err);
+          alert("Something went wrong. Please try again.");
+        });
+    });
+
+    skipRatingBtn.addEventListener("click", () => {
+      recordUsage();
       chatWindow.classList.remove("open");
       trigger.style.display = "flex";
+      isOpen = false;
+      ratingScreen.style.display = "none";
     });
 
     // ─── Send Message ─────────────────────────────────────────
@@ -375,6 +570,7 @@
       const text = inputEl.value.trim();
       if (!text) return;
 
+      hasConvo = true;
       addMessage(text, "user");
       inputEl.value = "";
 
