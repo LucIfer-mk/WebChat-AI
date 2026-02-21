@@ -90,6 +90,22 @@ class KnowledgeEntryResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# ─── Knowledge Document Schemas ──────────────────────────────
+
+class KnowledgeDocumentResponse(BaseModel):
+    id: str
+    chatbot_id: str
+    filename: str
+    file_type: str
+    file_size: int
+    chunk_count: int
+    status: str
+    error_message: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
 # ─── Conversation & Message Schemas ──────────────────────────
 
 class MessageResponse(BaseModel):

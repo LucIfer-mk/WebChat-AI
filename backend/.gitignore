@@ -1,5 +1,6 @@
 /.env
 /._pycache__
+backend/.env
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

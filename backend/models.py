@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from sqlalchemy import Column, String, DateTime, Text, Integer, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
+from pgvector.sqlalchemy import Vector
 from database import Base
 
 
@@ -37,7 +38,7 @@ class Chatbot(Base):
     text_color = Column(String(7), default="#FFFFFF")
     icon_url = Column(Text, nullable=True)
     position = Column(String(20), default="bottom-right")
-    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=True) # Nullable for migration, but will be required
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc),
                         onupdate=lambda: datetime.now(timezone.utc))
@@ -45,6 +46,8 @@ class Chatbot(Base):
     # Relationships
     knowledge_entries = relationship("KnowledgeEntry", back_populates="chatbot",
                                      cascade="all, delete-orphan")
+    knowledge_documents = relationship("KnowledgeDocument", back_populates="chatbot",
+                                        cascade="all, delete-orphan")
     conversations = relationship("Conversation", back_populates="chatbot",
                                   cascade="all, delete-orphan")
 
@@ -76,6 +79,39 @@ class KnowledgeEntry(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     chatbot = relationship("Chatbot", back_populates="knowledge_entries")
+
+
+class KnowledgeDocument(Base):
+    """Uploaded documents (PDF, Word) for a chatbot's knowledge base."""
+    __tablename__ = "knowledge_documents"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    chatbot_id = Column(String, ForeignKey("chatbots.id", ondelete="CASCADE"), nullable=False)
+    filename = Column(String(500), nullable=False)
+    file_type = Column(String(50), nullable=False)     # "pdf", "docx"
+    file_size = Column(Integer, default=0)
+    chunk_count = Column(Integer, default=0)
+    status = Column(String(20), default="processing")  # processing, ready, error
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    chatbot = relationship("Chatbot", back_populates="knowledge_documents")
+    chunks = relationship("DocumentChunk", back_populates="document",
+                          cascade="all, delete-orphan")
+
+
+class DocumentChunk(Base):
+    """Chunks of text from uploaded documents with vector embeddings."""
+    __tablename__ = "document_chunks"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    document_id = Column(String, ForeignKey("knowledge_documents.id", ondelete="CASCADE"), nullable=False)
+    chatbot_id = Column(String, ForeignKey("chatbots.id", ondelete="CASCADE"), nullable=False)
+    content = Column(Text, nullable=False)
+    chunk_index = Column(Integer, default=0)
+    embedding = Column(Vector(1536))  # OpenAI text-embedding-3-small = 1536 dims
+
+    document = relationship("KnowledgeDocument", back_populates="chunks")
 
 
 class Conversation(Base):

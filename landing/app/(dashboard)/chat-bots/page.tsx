@@ -19,6 +19,18 @@ import styles from "./chatbots.module.css";
 
 const API_URL = "http://localhost:8000";
 
+interface KnowledgeDocument {
+  id: string;
+  chatbot_id: string;
+  filename: string;
+  file_type: string;
+  file_size: number;
+  chunk_count: number;
+  status: string;
+  error_message?: string;
+  created_at: string;
+}
+
 interface Chatbot {
   id: string;
   name: string;
@@ -58,6 +70,11 @@ export default function ChatBotsPage() {
   const [knowledgeEntries, setKnowledgeEntries] = useState<KnowledgeEntry[]>(
     [],
   );
+  const [knowledgeDocuments, setKnowledgeDocuments] = useState<
+    KnowledgeDocument[]
+  >([]);
+  const [docUploading, setDocUploading] = useState(false);
+  const docInputRef = useRef<HTMLInputElement>(null);
   const [kbTrigger, setKbTrigger] = useState("");
   const [kbResponse, setKbResponse] = useState("");
   const [kbExact, setKbExact] = useState(false);
@@ -80,6 +97,20 @@ export default function ChatBotsPage() {
   useEffect(() => {
     fetchBots();
   }, []);
+
+  // Poll for document status if any are processing
+  useEffect(() => {
+    const hasProcessing = knowledgeDocuments.some(
+      (d) => d.status === "processing",
+    );
+    if (!hasProcessing || !editingBot) return;
+
+    const interval = setInterval(() => {
+      fetchDocuments(editingBot.id);
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [knowledgeDocuments, editingBot]);
 
   async function fetchBots() {
     try {
@@ -187,7 +218,10 @@ export default function ChatBotsPage() {
     setTimeout(() => setCopied(false), 2000);
   }
 
-  function openEditModal(bot: Chatbot) {
+  function openEditModal(
+    bot: Chatbot,
+    tab: "settings" | "knowledge" = "settings",
+  ) {
     setEditingBot(bot);
     setFormData({
       name: bot.name,
@@ -200,8 +234,9 @@ export default function ChatBotsPage() {
     });
     setIconFile(null);
     setIconPreview(bot.icon_url || null);
-    setEditTab("settings");
+    setEditTab(tab);
     fetchKnowledge(bot.id);
+    fetchDocuments(bot.id);
   }
 
   function closeEditModal() {
@@ -281,6 +316,78 @@ export default function ChatBotsPage() {
     } catch (err) {
       console.error("Failed to delete knowledge:", err);
     }
+  }
+
+  // ── Knowledge Documents ──
+  async function fetchDocuments(botId: string) {
+    try {
+      const res = await fetch(`${API_URL}/api/chatbots/${botId}/documents`);
+      const data = await res.json();
+      setKnowledgeDocuments(data);
+    } catch (err) {
+      console.error("Failed to fetch documents:", err);
+    }
+  }
+
+  async function handleUploadDocument(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !editingBot) return;
+
+    setDocUploading(true);
+    const fd = new FormData();
+    fd.append("file", file);
+
+    try {
+      const res = await fetch(
+        `${API_URL}/api/chatbots/${editingBot.id}/documents`,
+        {
+          method: "POST",
+          body: fd,
+        },
+      );
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.detail || "Failed to upload document");
+      } else {
+        await fetchDocuments(editingBot.id);
+      }
+    } catch (err) {
+      console.error("Failed to upload document:", err);
+      alert("Error uploading document. Please try again.");
+    } finally {
+      setDocUploading(false);
+      if (e.target) e.target.value = "";
+    }
+  }
+
+  async function handleDeleteDocument(docId: string) {
+    if (!editingBot) return;
+    if (
+      !confirm(
+        "Are you sure you want to delete this document? All associated AI memory will be removed.",
+      )
+    )
+      return;
+
+    try {
+      await fetch(
+        `${API_URL}/api/chatbots/${editingBot.id}/documents/${docId}`,
+        {
+          method: "DELETE",
+        },
+      );
+      setKnowledgeDocuments(knowledgeDocuments.filter((d) => d.id !== docId));
+    } catch (err) {
+      console.error("Failed to delete document:", err);
+    }
+  }
+
+  function formatFileSize(bytes: number) {
+    if (bytes === 0) return "0 Bytes";
+    const k = 1024;
+    const sizes = ["Bytes", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   }
 
   const embedBot = bots.find((b) => b.id === showEmbedModal);
@@ -378,10 +485,17 @@ export default function ChatBotsPage() {
                 <div className={styles.botActions}>
                   <button
                     className={styles.editBtn}
-                    onClick={() => openEditModal(bot)}
+                    onClick={() => openEditModal(bot, "settings")}
                   >
                     <Settings size={14} style={{ marginRight: 4 }} />
                     Edit
+                  </button>
+                  <button
+                    className={styles.knowledgeBtn}
+                    onClick={() => openEditModal(bot, "knowledge")}
+                  >
+                    <BookOpen size={14} style={{ marginRight: 4 }} />
+                    KB
                   </button>
                   <button
                     className={styles.embedBtn}
@@ -482,14 +596,141 @@ export default function ChatBotsPage() {
 
               {editTab === "knowledge" && (
                 <div className={styles.knowledgeSection}>
+                  {/* Document Knowledge Base */}
                   <div className={styles.kbInfo}>
-                    <BookOpen size={20} color="var(--secondary)" />
+                    <Upload size={20} color="#8B5CF6" />
                     <div>
-                      <h4>Custom Responses</h4>
+                      <h4>
+                        Document Knowledge Base{" "}
+                        <span className={styles.aiBadge}>AI POWERED</span>
+                      </h4>
                       <p>
-                        Add trigger words/phrases and their responses. When a
-                        visitor types a message containing the trigger, your bot
-                        will reply with the custom response.
+                        Upload PDF or Word files. Our AI will automatically
+                        index the content so your chatbot can answer questions
+                        based on your documents.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className={styles.kbStats}>
+                    <div className={styles.kbStatItem}>
+                      <span>{knowledgeDocuments.length}</span>
+                      <span>Documents</span>
+                    </div>
+                    <div className={styles.kbStatItem}>
+                      <span>
+                        {knowledgeDocuments.reduce(
+                          (acc, d) => acc + d.chunk_count,
+                          0,
+                        )}
+                      </span>
+                      <span>AI Memory Chunks</span>
+                    </div>
+                  </div>
+
+                  <div
+                    className={`${styles.docUploadArea} ${docUploading ? styles.uploading : ""}`}
+                    onClick={() => docInputRef.current?.click()}
+                  >
+                    <div className={styles.docUploadIcon}>
+                      {docUploading ? (
+                        <div
+                          className={styles.spinner}
+                          style={{ width: 24, height: 24, margin: 0 }}
+                        />
+                      ) : (
+                        <Upload size={24} />
+                      )}
+                    </div>
+                    <h4>
+                      {docUploading
+                        ? "Uploading & Processing..."
+                        : "Upload Knowledge Source"}
+                    </h4>
+                    <p>Click or drag PDF, DOCX file to add to AI memory</p>
+                    <div className={styles.docSupportedFormats}>
+                      <span className={styles.docFormatBadge}>PDF</span>
+                      <span className={styles.docFormatBadge}>DOCX</span>
+                    </div>
+                    <input
+                      ref={docInputRef}
+                      type="file"
+                      accept=".pdf,.docx,.doc"
+                      onChange={handleUploadDocument}
+                      style={{ display: "none" }}
+                    />
+                  </div>
+
+                  {knowledgeDocuments.length > 0 && (
+                    <div className={styles.docsList}>
+                      {knowledgeDocuments.map((doc) => (
+                        <div key={doc.id} className={styles.docItem}>
+                          <div
+                            className={`${styles.docFileIcon} ${doc.file_type === "pdf" ? styles.pdf : styles.docx}`}
+                          >
+                            <BookOpen size={20} />
+                          </div>
+                          <div className={styles.docItemInfo}>
+                            <div className={styles.docItemName}>
+                              {doc.filename}
+                            </div>
+                            <div className={styles.docItemMeta}>
+                              <span className={styles.docItemSize}>
+                                {formatFileSize(doc.file_size)}
+                              </span>
+                              <span
+                                className={`${styles.docItemStatus} ${styles[doc.status]}`}
+                              >
+                                {doc.status}
+                                {doc.status === "error" &&
+                                  doc.error_message && (
+                                    <span
+                                      className={styles.docErrorTooltip}
+                                      title={doc.error_message}
+                                    >
+                                      (
+                                      {doc.error_message.includes("quota")
+                                        ? "Quota Exceeded"
+                                        : "Error"}
+                                      )
+                                    </span>
+                                  )}
+                              </span>
+                              {doc.status === "ready" && (
+                                <span className={styles.docChunkCount}>
+                                  {doc.chunk_count} chunks
+                                </span>
+                              )}
+                            </div>
+                            {doc.status === "error" && doc.error_message && (
+                              <div className={styles.docErrorDetail}>
+                                {doc.error_message}
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            className={styles.docDeleteBtn}
+                            onClick={() => handleDeleteDocument(doc.id)}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className={styles.sectionDivider}>
+                    <span>OR</span>
+                  </div>
+
+                  <div className={styles.kbInfo}>
+                    <MessageSquare size={20} color="var(--primary)" />
+                    <div>
+                      <h4>Custom Q&A Pairs</h4>
+                      <p>
+                        Add specific trigger-response pairs for common
+                        questions. These will always override document-based
+                        answers.
                       </p>
                     </div>
                   </div>
@@ -539,7 +780,7 @@ export default function ChatBotsPage() {
 
                   {/* List of entries */}
                   <div className={styles.kbList}>
-                    <h4>{knowledgeEntries.length} Knowledge Entries</h4>
+                    <h4>{knowledgeEntries.length} Custom Q&A Entries</h4>
                     {knowledgeEntries.length === 0 ? (
                       <div className={styles.kbEmpty}>
                         <MessageSquare size={24} color="var(--text-muted)" />

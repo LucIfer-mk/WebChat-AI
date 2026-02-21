@@ -924,3 +924,323 @@
 .kbDeleteBtn:hover {
     background: var(--error-bg);
 }
+
+/* ── Knowledge Base Button on Card ── */
+.knowledgeBtn {
+    flex: 1;
+    padding: 9px;
+    background: rgba(139, 92, 246, 0.08);
+    color: #8B5CF6;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    font-size: 0.8rem;
+    transition: all var(--transition-fast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.knowledgeBtn:hover {
+    background: #8B5CF6;
+    color: #fff;
+}
+
+/* ── Knowledge Base Modal (full page) ── */
+.kbModalWide {
+    background: #fff;
+    border-radius: var(--radius-xl);
+    width: 800px;
+    max-height: 92vh;
+    overflow-y: auto;
+    box-shadow: var(--shadow-xl);
+    animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid var(--border-light);
+}
+
+/* ── Document Upload Section ── */
+.docUploadArea {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius-md);
+    padding: 32px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    background: var(--bg-main);
+    position: relative;
+}
+
+.docUploadArea:hover {
+    border-color: #8B5CF6;
+    background: rgba(139, 92, 246, 0.04);
+}
+
+.docUploadArea.uploading {
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+.docUploadIcon {
+    width: 56px;
+    height: 56px;
+    border-radius: var(--radius-md);
+    background: rgba(139, 92, 246, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 14px;
+    color: #8B5CF6;
+}
+
+.docUploadArea h4 {
+    font-size: 0.95rem;
+    color: var(--text-main);
+    margin-bottom: 6px;
+}
+
+.docUploadArea p {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+}
+
+.docUploadArea input {
+    display: none;
+}
+
+.docSupportedFormats {
+    margin-top: 12px;
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+}
+
+.docFormatBadge {
+    padding: 4px 10px;
+    background: rgba(139, 92, 246, 0.08);
+    color: #8B5CF6;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* ── Documents List ── */
+.docsList {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.docItem {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 18px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+}
+
+.docItem:hover {
+    border-color: rgba(139, 92, 246, 0.2);
+    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.06);
+}
+
+.docFileIcon {
+    width: 42px;
+    height: 42px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.docFileIcon.pdf {
+    background: rgba(239, 68, 68, 0.1);
+    color: #EF4444;
+}
+
+.docFileIcon.docx {
+    background: rgba(59, 130, 246, 0.1);
+    color: #3B82F6;
+}
+
+.docItemInfo {
+    flex: 1;
+    min-width: 0;
+}
+
+.docItemName {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.docItemMeta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 4px;
+}
+
+.docItemSize {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.docItemStatus {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.docItemStatus.ready {
+    background: rgba(16, 185, 129, 0.1);
+    color: #10B981;
+}
+
+.docItemStatus.processing {
+    background: rgba(245, 158, 11, 0.1);
+    color: #F59E0B;
+}
+
+.docItemStatus.error {
+    background: rgba(239, 68, 68, 0.1);
+    color: #EF4444;
+}
+
+.docChunkCount {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    padding: 2px 8px;
+    background: var(--bg-subtle);
+    border-radius: 4px;
+}
+
+.docDeleteBtn {
+    padding: 8px;
+    color: var(--error);
+    border-radius: var(--radius-sm);
+    transition: all var(--transition-fast);
+    flex-shrink: 0;
+}
+
+.docDeleteBtn:hover {
+    background: var(--error-bg);
+}
+
+/* ── Section Divider ── */
+.sectionDivider {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 24px 0 16px;
+}
+
+.sectionDivider::before,
+.sectionDivider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+}
+
+.sectionDivider span {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+
+/* ── Spinning animation for processing ── */
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.processing {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* ── AI Badge ── */
+.aiBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(99, 102, 241, 0.15));
+    color: #8B5CF6;
+    border-radius: 4px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+}
+
+/* ── KB Stats Row ── */
+.kbStats {
+    display: flex;
+    gap: 16px;
+    padding: 14px 0;
+}
+
+.kbStatItem {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: var(--bg-subtle);
+    border-radius: var(--radius-sm);
+    flex: 1;
+}
+
+.kbStatItem span:first-child {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.kbStatItem span:last-child {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.docErrorTooltip {
+    font-size: 0.7rem;
+    color: #EF4444;
+    cursor: help;
+    text-decoration: underline dotted;
+    margin-left: 4px;
+}
+
+.docErrorDetail {
+    margin-top: 8px;
+    padding: 10px;
+    background: rgba(239, 68, 68, 0.05);
+    border-left: 3px solid #EF4444;
+    color: #B91C1C;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    border-radius: 0 4px 4px 0;
+}

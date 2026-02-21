@@ -1,34 +1,42 @@
 import os
 import uuid
-import shutil
+import logging
 from typing import List, Optional
 from datetime import datetime, timezone, timedelta
 
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from sqlalchemy import func, cast, Date
+from sqlalchemy import func, cast, Date, text
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 
-from database import engine, get_db, Base
-from models import User, Chatbot, KnowledgeEntry, Conversation, Message, Review, Visit, Usage
+from database import engine, get_db, Base, init_pgvector, SessionLocal
+from models import (
+    User, Chatbot, KnowledgeEntry, KnowledgeDocument, DocumentChunk,
+    Conversation, Message, Review, Visit, Usage
+)
 from schemas import (
     UserRegister, UserLogin, UserResponse,
     ChatbotCreate, ChatbotUpdate, ChatbotResponse,
     KnowledgeEntryCreate, KnowledgeEntryUpdate, KnowledgeEntryResponse,
+    KnowledgeDocumentResponse,
     ConversationResponse, ConversationDetailResponse,
     DashboardStats, BotStats, ChartDataPoint,
     ReviewCreate, ReviewResponse,
 )
-from passlib.context import CryptContext
+from ai_service import process_document, generate_ai_response
+import bcrypt
 
 load_dotenv()
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 
-# Create tables
+# Initialize pgvector extension and create tables
+init_pgvector()
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="WebChat AI API", version="2.0.0")
@@ -46,14 +54,48 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 
+def process_document_task(bot_id: str, doc_id: str, file_bytes: bytes, filename: str):
+    """Background task to process document with its own DB session."""
+    with SessionLocal() as db:
+        try:
+            process_document(db, bot_id, doc_id, file_bytes, filename)
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"Background processing error: {error_msg}")
+            doc = db.query(KnowledgeDocument).filter(KnowledgeDocument.id == doc_id).first()
+            if doc:
+                doc.status = "error"
+                doc.error_message = error_msg
+                db.commit()
+
+
+# ─── Schema Migration (Simple) ───────────────────────────
+def run_migrations():
+    """Ensure all required columns exist."""
+    # Check for error_message column
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("SELECT error_message FROM knowledge_documents LIMIT 1"))
+        except Exception:
+            # Need to rollback the failed transaction before trying ALTER
+            conn.rollback()
+            logger.info("Adding error_message column to knowledge_documents...")
+            try:
+                conn.execute(text("ALTER TABLE knowledge_documents ADD COLUMN error_message TEXT"))
+                conn.commit()
+            except Exception as e:
+                logger.error(f"Migration error: {e}")
+                conn.rollback()
+
+run_migrations()
+
+
 # ─── Auth Logic ──────────────────────────────────────────
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+def get_password_hash(password: str):
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
-def get_password_hash(password):
-    return pwd_context.hash(password)
-
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+def verify_password(plain_password: str, hashed_password: str):
+    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -232,6 +274,91 @@ def delete_knowledge(bot_id: str, entry_id: str, db: Session = Depends(get_db)):
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  KNOWLEDGE DOCUMENTS (PDF / DOCX uploads)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+@app.get("/api/chatbots/{bot_id}/documents", response_model=List[KnowledgeDocumentResponse])
+def list_documents(bot_id: str, db: Session = Depends(get_db)):
+    bot = db.query(Chatbot).filter(Chatbot.id == bot_id).first()
+    if not bot:
+        raise HTTPException(status_code=404, detail="Chatbot not found")
+    return db.query(KnowledgeDocument).filter(
+        KnowledgeDocument.chatbot_id == bot_id
+    ).order_by(KnowledgeDocument.created_at.desc()).all()
+
+
+@app.post("/api/chatbots/{bot_id}/documents", response_model=KnowledgeDocumentResponse)
+def upload_document(
+    bot_id: str,
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    bot = db.query(Chatbot).filter(Chatbot.id == bot_id).first()
+    if not bot:
+        raise HTTPException(status_code=404, detail="Chatbot not found")
+
+    # Validate file type
+    filename = file.filename or "document"
+    ext = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
+    if ext not in ("pdf", "docx", "doc"):
+        raise HTTPException(
+            status_code=400,
+            detail="Only PDF and Word (.docx) files are supported."
+        )
+
+    # Read file content
+    file_bytes = file.file.read()
+    file_size = len(file_bytes)
+
+    # Create document record
+    doc = KnowledgeDocument(
+        chatbot_id=bot_id,
+        filename=filename,
+        file_type=ext,
+        file_size=file_size,
+        status="processing"
+    )
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+
+    # Add processing to background tasks
+    background_tasks.add_task(process_document_task, bot_id, doc.id, file_bytes, filename)
+
+    return doc
+
+
+@app.delete("/api/chatbots/{bot_id}/documents/{doc_id}")
+def delete_document(bot_id: str, doc_id: str, db: Session = Depends(get_db)):
+    doc = db.query(KnowledgeDocument).filter(
+        KnowledgeDocument.id == doc_id,
+        KnowledgeDocument.chatbot_id == bot_id
+    ).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    db.delete(doc)
+    db.commit()
+    return {"detail": "Document and all associated chunks deleted"}
+
+
+@app.get("/api/chatbots/{bot_id}/documents/{doc_id}/status")
+def document_status(bot_id: str, doc_id: str, db: Session = Depends(get_db)):
+    doc = db.query(KnowledgeDocument).filter(
+        KnowledgeDocument.id == doc_id,
+        KnowledgeDocument.chatbot_id == bot_id
+    ).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return {
+        "id": doc.id,
+        "status": doc.status,
+        "chunk_count": doc.chunk_count,
+        "filename": doc.filename
+    }
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  WIDGET ENDPOINTS
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 @app.get("/widget.js")
@@ -291,32 +418,14 @@ def widget_chat(bot_id: str, body: dict, db: Session = Depends(get_db)):
     db.add(user_msg)
     db.commit()
 
-    # ── Search knowledge base for a matching response ──
+    # ── Generate AI-powered response ──
     reply = None
-    lower_msg = user_message.lower().strip()
+    try:
+        reply = generate_ai_response(db, bot_id, user_message, bot.name)
+    except Exception as e:
+        logger.error(f"AI response error: {e}")
 
-    # 1. Check exact matches first
-    exact_entries = db.query(KnowledgeEntry).filter(
-        KnowledgeEntry.chatbot_id == bot_id,
-        KnowledgeEntry.is_exact_match == True,
-    ).all()
-    for entry in exact_entries:
-        if entry.trigger.lower().strip() == lower_msg:
-            reply = entry.response
-            break
-
-    # 2. Check contains matches
-    if not reply:
-        contains_entries = db.query(KnowledgeEntry).filter(
-            KnowledgeEntry.chatbot_id == bot_id,
-            KnowledgeEntry.is_exact_match == False,
-        ).all()
-        for entry in contains_entries:
-            if entry.trigger.lower().strip() in lower_msg:
-                reply = entry.response
-                break
-
-    # 3. Fallback
+    # Fallback if AI is not configured or fails
     if not reply:
         reply = f"Thanks for your message! I'm {bot.name}. I don't have a specific answer for that yet, but feel free to ask me anything else!"
 
