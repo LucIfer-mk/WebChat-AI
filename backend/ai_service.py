@@ -6,6 +6,9 @@ AI Knowledge Base Service
 - Answers questions using RAG with strict guardrails
 """
 
+from dotenv import load_dotenv
+load_dotenv()
+
 import os
 import uuid
 import io
@@ -23,22 +26,40 @@ from models import KnowledgeEntry, KnowledgeDocument, DocumentChunk
 
 logger = logging.getLogger(__name__)
 
+AI_PROVIDER = os.getenv("AI_PROVIDER", "openai").lower()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-EMBEDDING_MODEL = "text-embedding-3-small"     # 1536 dimensions
-CHAT_MODEL = "gpt-4o-mini"                     # cost-effective, great for RAG
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+
+# Models selection based on provider
+if AI_PROVIDER == "ollama":
+    CHAT_MODEL = os.getenv("OLLAMA_CHAT_MODEL", "llama3")
+    EMBEDDING_MODEL = os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
+else:
+    CHAT_MODEL = "gpt-4o-mini"
+    EMBEDDING_MODEL = "text-embedding-3-small"
+
 CHUNK_SIZE = 500       # ~500 words per chunk
 CHUNK_OVERLAP = 50     # overlap for context continuity
 TOP_K = 5              # number of chunks to retrieve
+EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "1536"))
 
 
 def _get_client() -> OpenAI:
-    if not OPENAI_API_KEY or OPENAI_API_KEY == "your-openai-api-key-here":
-        raise ValueError("OPENAI_API_KEY is not set. Please update your .env file.")
-    
     # Use a custom httpx client with trust_env=False to avoid "proxies" error in some environments
-    # This prevents the client from trying to use system proxies that might conflict with the library.
     http_client = httpx.Client(trust_env=False, timeout=60.0)
-    return OpenAI(api_key=OPENAI_API_KEY, http_client=http_client)
+
+    if AI_PROVIDER == "openai":
+        if not OPENAI_API_KEY or OPENAI_API_KEY == "your-openai-api-key-here":
+            raise ValueError("OPENAI_API_KEY is not set. Please update your .env file.")
+        return OpenAI(api_key=OPENAI_API_KEY, http_client=http_client)
+    else:
+        # Ollama / Local provider
+        # Ollama often doesn't need an API key, so we use a dummy one
+        return OpenAI(
+            base_url=OLLAMA_BASE_URL,
+            api_key="ollama", # dummy key
+            http_client=http_client
+        )
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -108,7 +129,7 @@ def generate_embeddings(texts: List[str]) -> List[List[float]]:
     client = _get_client()
     # Process in batches of 100 (OpenAI limit is 2048)
     all_embeddings = []
-    batch_size = 100
+    batch_size = 10 if AI_PROVIDER == "ollama" else 100
     for i in range(0, len(texts), batch_size):
         batch = texts[i:i + batch_size]
         response = client.embeddings.create(
@@ -151,21 +172,27 @@ def process_document(
 
     try:
         # Step 1: Extract text
+        print(f"Extracting text from {filename}...")
         full_text = extract_text(file_bytes, filename)
         if not full_text.strip():
+            print("Error: Extracted text is empty.")
             doc.status = "error"
             db.commit()
             return
 
         # Step 2: Chunk the text
+        print(f"Chunking text... ({len(full_text)} characters)")
         chunks = chunk_text(full_text)
         if not chunks:
+            print("Error: No chunks created.")
             doc.status = "error"
             db.commit()
             return
 
         # Step 3: Generate embeddings
+        print(f"Generating embeddings for {len(chunks)} chunks using {EMBEDDING_MODEL}...")
         embeddings = generate_embeddings(chunks)
+        print(f"Generated {len(embeddings)} embeddings successfully.")
 
         # Step 4: Store chunks with embeddings
         for idx, (chunk_text_content, embedding) in enumerate(zip(chunks, embeddings)):
@@ -185,11 +212,21 @@ def process_document(
         logger.info(f"Document {filename} processed: {len(chunks)} chunks created")
 
     except Exception as e:
+        import traceback
+        db.rollback()
         error_msg = str(e)
         logger.error(f"Error processing document {filename}: {error_msg}")
-        doc.status = "error"
-        doc.error_message = error_msg
-        db.commit()
+        traceback.print_exc()
+        print(f"Error processing document: {error_msg}")
+        try:
+            # Re-fetch the document within a fresh transaction if possible
+            doc = db.query(KnowledgeDocument).filter(KnowledgeDocument.id == document_id).first()
+            if doc:
+                doc.status = "error"
+                doc.error_message = error_msg
+                db.commit()
+        except:
+            db.rollback()
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -209,13 +246,15 @@ def search_similar_chunks(
     query_embedding = generate_single_embedding(query)
 
     # Use pgvector's cosine distance operator <=>
+    # NOTE: Use CAST(...AS vector) instead of ::vector to avoid psycopg2
+    # misinterpreting :: after the named parameter colon.
     results = db.execute(
-        text("""
+        text(f"""
             SELECT id, content, chunk_index, document_id,
-                   1 - (embedding <=> :query_embedding::vector) AS similarity
+                   1 - (embedding <=> CAST(:query_embedding AS vector({EMBEDDING_DIM}))) AS similarity
             FROM document_chunks
             WHERE chatbot_id = :chatbot_id
-            ORDER BY embedding <=> :query_embedding::vector
+            ORDER BY embedding <=> CAST(:query_embedding AS vector({EMBEDDING_DIM}))
             LIMIT :top_k
         """),
         {
@@ -241,20 +280,22 @@ def search_similar_chunks(
 #  AI CHAT (RAG with strict guardrails)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-SYSTEM_PROMPT = """You are a helpful AI assistant for a specific business/website. You MUST follow these rules STRICTLY:
-
-1. ONLY answer questions using the provided context below. Do NOT use any external knowledge other than basic greetings.
-2. If the answer cannot be found in the provided context, respond with: "I'm sorry, I don't have information about that in my knowledge base. Is there something else I can help you with?"
-3. Do NOT make up, infer, or hallucinate any information that is not explicitly in the context.
-4. Be conversational, friendly, and helpful within the bounds of the provided information.
-5. If the user greets you (hello, hi, etc.), respond warmly and ask how you can help.
-6. Keep your answers concise and relevant.
-7. If a question is partially answerable from the context, answer only what you can and note that you don't have more information on the rest.
-
+SYSTEM_PROMPT = """You are a friendly and helpful AI assistant representing a specific business or website.
+Please follow these guidelines carefully:
+1. Only answer questions using the information provided in the context below. Do not rely on outside knowledge (except for basic greetings and polite conversation).
+2. If the answer is not available in the context, respond with:
+"I'm sorry, I don't have information about that in my knowledge base. Is there something else I can help you with?"
+3. Never guess, assume, or create information that is not clearly stated in the context.
+4. Keep your tone warm, conversational, and professional—like a helpful staff member assisting a customer.
+5. If the user greets you (e.g., "hi", "hello"), respond politely and ask how you can assist them.
+6. Keep responses clear, concise, and relevant. Avoid unnecessary details.
+7. If a question can only be partially answered using the context, provide the available information and politely mention that you don’t have further details.
+8. Prioritize accuracy over completeness. It’s better to say you don’t know than to provide incorrect information.
+---
 CONTEXT FROM KNOWLEDGE BASE:
 {context}
-
-CUSTOM Q&A RESPONSES (exact matches take priority):
+---
+CUSTOM Q&A RESPONSES (these take priority if matched exactly):
 {custom_responses}
 """
 
@@ -327,7 +368,11 @@ def generate_ai_response(
                         context_parts.append(f"[Source {i}]: {chunk['content']}")
                 context_text = "\n\n".join(context_parts)
         except Exception as e:
+            import traceback
+            db.rollback()
             logger.error(f"Error searching chunks: {e}")
+            traceback.print_exc()
+            print(f"Vector search error: {e}")
 
     if not context_text and not custom_responses_text:
         return None
@@ -355,5 +400,7 @@ def generate_ai_response(
         return response.choices[0].message.content.strip()
 
     except Exception as e:
+        import traceback
         logger.error(f"OpenAI API error: {e}")
+        traceback.print_exc()
         return None

@@ -1,9 +1,15 @@
+from dotenv import load_dotenv
+load_dotenv()
+
+import os
 import uuid
 from datetime import datetime, timezone
 from sqlalchemy import Column, String, DateTime, Text, Integer, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from pgvector.sqlalchemy import Vector
 from database import Base
+
+EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "1536"))
 
 
 class User(Base):
@@ -109,7 +115,7 @@ class DocumentChunk(Base):
     chatbot_id = Column(String, ForeignKey("chatbots.id", ondelete="CASCADE"), nullable=False)
     content = Column(Text, nullable=False)
     chunk_index = Column(Integer, default=0)
-    embedding = Column(Vector(1536))  # OpenAI text-embedding-3-small = 1536 dims
+    embedding = Column(Vector(EMBEDDING_DIM))  # Configurable dimension
 
     document = relationship("KnowledgeDocument", back_populates="chunks")
 

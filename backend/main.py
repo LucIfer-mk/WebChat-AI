@@ -1,5 +1,6 @@
 import os
 import uuid
+import shutil
 import logging
 from typing import List, Optional
 from datetime import datetime, timezone, timedelta
@@ -11,6 +12,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import func, cast, Date, text
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
+load_dotenv()
 
 from database import engine, get_db, Base, init_pgvector, SessionLocal
 from models import (
@@ -28,8 +30,6 @@ from schemas import (
 )
 from ai_service import process_document, generate_ai_response
 import bcrypt
-
-load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -423,7 +423,9 @@ def widget_chat(bot_id: str, body: dict, db: Session = Depends(get_db)):
     try:
         reply = generate_ai_response(db, bot_id, user_message, bot.name)
     except Exception as e:
+        import traceback
         logger.error(f"AI response error: {e}")
+        traceback.print_exc()
 
     # Fallback if AI is not configured or fails
     if not reply:
